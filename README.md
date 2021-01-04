@@ -35,12 +35,23 @@ docker run -d
   -e MAIL_FROM_ADDRESS='sales@example.com'
   -e MAIL_FROM_NAME='Sales Department'
   -e MAIL_PASSWORD='SUPERSECRETEMAILPASSWORD'
+  -e SSL_HOSTNAME='localhost'
   -p '80:8000'
   -p '443:443'
   invoiceninja/invoiceninja
 ```
 A list of environment variables can be found [here](https://github.com/invoiceninja/invoiceninja/blob/master/.env.example)
 
+
+
+### SSL
+By default, it generates self signed certificates, however you can provide custom ones via env variables at run time:
+```
+$SSL_KEY
+$SSL_CERT
+``` 
+
+If you want to disable generation of SSL certificates, simply pass env var `GEN_SSL=false` at runtime.
 
 ### With docker-compose
 

@@ -82,6 +82,7 @@ VOLUME /var/www/app/public
 WORKDIR /var/www/app
 
 COPY docker-compose/nginx.conf /etc/nginx/nginx.conf
+COPY docker-compose/genssl.sh /genssl.sh
 EXPOSE 80
 
 COPY docker-compose/cronscript.sh /cronscript.sh
