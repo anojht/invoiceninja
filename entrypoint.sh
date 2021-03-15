@@ -42,6 +42,10 @@ chown www-data:www-data /var/www/app/public/logo
 	#touch "/var/www/app/is-seeded"
 #fi
 
+if [ "$GEN_SSL" != "false" ]; then
+  /genssl.sh
+fi
+
 NGINX="$(service nginx start)"
 
 /bin/sh /cronscript.sh &
