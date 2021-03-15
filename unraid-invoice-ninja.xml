@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <Container version="2">
   <Name>invoiceninja working</Name>
-  <Repository>maihai/invoiceninja</Repository>
-  <Registry>https://hub.docker.com/r/maihai/invoiceninja</Registry>
+  <Repository>anojht/invoiceninja</Repository>
+  <Registry>https://hub.docker.com/r/anojht/invoiceninja</Registry>
   <Network>bridge</Network>
   <Privileged>false</Privileged>
   <Support>https://forums.unraid.net/topic/87798-support-selfhostersnets-template-repository/</Support>
@@ -10,7 +10,7 @@
   <Overview> An open-source invoicing and time-tracking app built with Laravel https://www.invoiceninja.com  </Overview>
   <Category>Productivity: Tools:</Category>
   <WebUI>https://[IP]:[PORT:8443]/</WebUI>
-  <TemplateURL>https://raw.githubusercontent.com/mihai-cindea/invoiceninja/master/unraid-invoice-ninja.xml</TemplateURL>
+  <TemplateURL>https://raw.githubusercontent.com/anojht/invoiceninja/master/unraid-invoice-ninja.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/selfhosters/unRAID-CA-templates/master/templates/img/invoiceninja.png</Icon>
   <Config Name="APP_ENV" Target="APP_ENV" Default="production" Description="Container Variable: APP_ENV" Type="Variable" Display="advanced" Required="false" Mask="false"/>
   <Config Name="Debug Mode" Target="APP_DEBUG" Default="0" Description="Container Variable: APP_DEBUG" Type="Variable" Display="advanced" Required="false" Mask="false"/>
