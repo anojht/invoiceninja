@@ -1,4 +1,4 @@
-ARG PHP_IMAGE_TAG=7.2-fpm-stretch
+ARG PHP_IMAGE_TAG=7.3-fpm-stretch
 FROM php:${PHP_IMAGE_TAG}
 
 LABEL maintainer="Anojh Thayaparan <athayapa@sfu.ca>"
@@ -21,6 +21,7 @@ ENV BUILD_DEPS \
 	libfreetype6 \
 	libfontconfig1 \
 	libfontconfig1-dev \
+	libzip-dev \
 	nginx \
 	nano
 RUN apt-get update \
