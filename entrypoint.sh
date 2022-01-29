@@ -46,11 +46,11 @@ if [ "$GEN_SSL" != "false" ]; then
   /genssl.sh
 fi
 
-NGINX="$(service nginx start)"
+NGINX="$(rc-status -a; rc-service nginx start)"
 
 /bin/sh /cronscript.sh &
 
-/bin/sh $NGINX &
+/bin/sh -c $NGINX &
 
 echo 'start'
 exec "$@"

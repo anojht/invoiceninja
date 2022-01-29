@@ -1,14 +1,13 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/anojht/invoiceninja.svg)](https://hub.docker.com/r/anojht/invoiceninja/)
 [![Paypal](https://img.shields.io/badge/paypal-donate-yellow.svg)](https://paypal.me/Anojh)
 
-___
+---
 
 DockerFile for invoice ninja (https://www.invoiceninja.com/)
 
-This image is based on `php:7.2-fpm` official version.
+This image is based on `php:7.4-fpm-alpine` official version.
 
 To make your data persistent, you have to mount `/var/www/app/public/logo` and `/var/www/app/storage`.
-
 
 ### Usage
 
@@ -40,16 +39,17 @@ docker run -d
   -p '443:443'
   invoiceninja/invoiceninja
 ```
+
 A list of environment variables can be found [here](https://github.com/invoiceninja/invoiceninja/blob/master/.env.example)
 
-
-
 ### SSL
+
 By default, it generates self signed certificates, however you can provide custom ones via env variables at run time:
+
 ```
 $SSL_KEY
 $SSL_CERT
-``` 
+```
 
 If you want to disable generation of SSL certificates, simply pass env var `GEN_SSL=false` at runtime.
 
@@ -59,7 +59,3 @@ A pretty ready to use docker-compose configuration can be found into [`./docker-
 Rename `.env.example` into `.env` and change the environment's variable as needed.
 The file assume that all your persistent data is mounted from `/mnt/user/appdata/invoiceninja/`.
 Once started the application should be accessible at http://IPADDRESS:8000/
-
-### Know issue
-
-Phantomjs doesn't work on linux alpine https://github.com/ariya/phantomjs/issues/14186
