@@ -1,4 +1,4 @@
-ARG PHP_IMAGE_TAG=7.3-fpm-stretch
+ARG PHP_IMAGE_TAG=7.4-fpm-alpine
 FROM php:${PHP_IMAGE_TAG}
 
 LABEL maintainer="Anojh Thayaparan <athayapa@sfu.ca>"
