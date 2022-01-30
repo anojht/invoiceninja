@@ -10,7 +10,7 @@ ENV PHANTOMJS phantomjs-2.1.1-linux-x86_64
 RUN apk update \
 	&& apk add --no-cache git gmp-dev freetype-dev libjpeg-turbo-dev \
 	libzip-dev unzip nginx nano coreutils chrpath fontconfig libpng-dev \
-	bash php7-zip php7-pdo php7-pdo_mysql openrc
+	bash php7-zip php7-pdo php7-pdo_mysql supervisor
 
 RUN docker-php-ext-configure gd --with-freetype=/usr/include/ --with-jpeg=/usr/include/ \
 	&& docker-php-ext-configure gmp \
@@ -67,6 +67,7 @@ VOLUME /var/www/app/public
 
 WORKDIR /var/www/app
 
+COPY docker-compose/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY docker-compose/nginx.conf /etc/nginx/nginx.conf
 COPY docker-compose/genssl.sh /genssl.sh
 EXPOSE 80
@@ -76,4 +77,5 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh /cronscript.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["php-fpm"]
+
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

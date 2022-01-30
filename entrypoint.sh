@@ -31,8 +31,7 @@ if [ ! -e /var/www/app/public/version ] || [ "$INVOICENINJA_VERSION" != "$(cat /
 fi
 
 # fix permission for mounted directories
-chown www-data:www-data /var/www/app/storage
-chown www-data:www-data /var/www/app/public/logo
+chown www-data:www-data -R /var/www/app/storage /var/www/app/public
 
 #php artisan optimize --force
 #php artisan migrate --force
@@ -46,11 +45,11 @@ if [ "$GEN_SSL" != "false" ]; then
   /genssl.sh
 fi
 
-NGINX="$(rc-status -a; rc-service nginx start)"
+#NGINX="$(rc-status -a; rc-service nginx start)"
 
 /bin/sh /cronscript.sh &
 
-/bin/sh -c $NGINX &
+#/bin/sh -c $NGINX &
 
 echo 'start'
 exec "$@"
