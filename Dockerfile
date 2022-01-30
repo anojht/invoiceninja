@@ -21,10 +21,6 @@ RUN cd /usr/share \
 	&& curl  -L https://github.com/Overbryd/docker-phantomjs-alpine/releases/download/2.11/phantomjs-alpine-x86_64.tar.bz2 | tar xj \
 	&& ln -s /usr/share/phantomjs/phantomjs /usr/local/bin/phantomjs
 
-RUN rc-update add nginx default \
-	&& mkdir /run/openrc \
-	&& touch /run/openrc/softlevel
-
 # set recommended PHP.ini settings
 # see https://secure.php.net/manual/en/opcache.installation.php
 RUN { \
