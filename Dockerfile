@@ -14,7 +14,7 @@ RUN apk update \
 
 RUN docker-php-ext-configure gd --with-freetype=/usr/include/ --with-jpeg=/usr/include/ \
 	&& docker-php-ext-configure gmp \
-	&& docker-php-ext-install iconv pdo pdo_mysql gd gmp opcache zip \
+	&& docker-php-ext-install pdo pdo_mysql gd gmp opcache zip \
 	&& echo "php_admin_value[error_reporting] = E_ALL & ~E_NOTICE & ~E_WARNING & ~E_STRICT & ~E_DEPRECATED">>/usr/local/etc/php-fpm.d/www.conf
 
 RUN cd /usr/share \
