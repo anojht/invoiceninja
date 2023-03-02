@@ -1,77 +1,121 @@
-ARG PHP_IMAGE_TAG=7.4-fpm-alpine
-FROM php:${PHP_IMAGE_TAG}
+ARG PHP_VERSION=8.1
+ARG BAK_STORAGE_PATH=/var/www/app/docker-backup-storage/
+ARG BAK_PUBLIC_PATH=/var/www/app/docker-backup-public/
+
+# Get Invoice Ninja and install nodejs packages
+FROM --platform=$BUILDPLATFORM node:lts-alpine as build
+
+# Download Invoice Ninja
+ARG INVOICENINJA_VERSION
+ADD https://github.com/invoiceninja/invoiceninja/tarball/v$INVOICENINJA_VERSION /tmp/ninja.tar.gz
+
+RUN set -eux; apk add curl unzip
+
+# Extract Invoice Ninja
+RUN mkdir -p /var/www/app \
+	&& tar --strip-components=1 -xf /tmp/ninja.tar.gz -C /var/www/app/ \
+	&& mkdir -p /var/www/app/public/logo /var/www/app/storage \
+	&& mv /var/www/app/.env.example /var/www/app/.env \
+	&& rm -rf /var/www/app/docs /var/www/app/tests
+
+# Download and extract the latest react application
+RUN curl -LGO $(curl https://api.github.com/repos/invoiceninja/ui/releases/latest | grep "browser_download_url" | awk '{ print $2 }' | sed 's/,$//' | sed 's/"//g');
+RUN cp invoiceninja-react.zip /tmp/invoiceninja-react.zip
+RUN unzip /tmp/invoiceninja-react.zip
+RUN cp -r dist/react/* /var/www/app/public/react/
+# Download and extract the latest react application
+#
+WORKDIR /var/www/app/
+
+# Install node packages
+ARG BAK_STORAGE_PATH
+ARG BAK_PUBLIC_PATH
+RUN --mount=target=/var/www/app/node_modules,type=cache \
+	npm install --production \
+	&& npm run production \
+	&& mv /var/www/app/storage $BAK_STORAGE_PATH \
+	&& mv /var/www/app/public $BAK_PUBLIC_PATH
+
+# Prepare php image
+FROM php:${PHP_VERSION}-fpm-alpine3.15 as prod
 
 LABEL maintainer="Anojh Thayaparan <athayapa@sfu.ca>"
 
-#####
-# SYSTEM REQUIREMENT
-#####
-ENV PHANTOMJS phantomjs-2.1.1-linux-x86_64
-RUN apk update \
-	&& apk add --no-cache git gmp-dev freetype-dev libjpeg-turbo-dev \
-	libzip-dev unzip nginx nano coreutils chrpath fontconfig libpng-dev \
-	bash php7-zip php7-pdo php7-pdo_mysql supervisor
+# Adding caching_sha2_password.so
+# With this we get native support for caching_sha2_password
+RUN apk add --no-cache mariadb-connector-c
 
-RUN docker-php-ext-configure gd --with-freetype=/usr/include/ --with-jpeg=/usr/include/ \
-	&& docker-php-ext-configure gmp \
-	&& docker-php-ext-install pdo pdo_mysql gd gmp opcache zip \
-	&& echo "php_admin_value[error_reporting] = E_ALL & ~E_NOTICE & ~E_WARNING & ~E_STRICT & ~E_DEPRECATED">>/usr/local/etc/php-fpm.d/www.conf
+RUN mv /usr/local/etc/php/php.ini-production /usr/local/etc/php/php.ini
 
-RUN cd /usr/share \
-	&& curl  -L https://github.com/Overbryd/docker-phantomjs-alpine/releases/download/2.11/phantomjs-alpine-x86_64.tar.bz2 | tar xj \
-	&& ln -s /usr/share/phantomjs/phantomjs /usr/local/bin/phantomjs
+# Install PHP extensions
+# https://hub.docker.com/r/mlocati/php-extension-installer/tags
+COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
 
-# set recommended PHP.ini settings
-# see https://secure.php.net/manual/en/opcache.installation.php
-RUN { \
-	echo 'opcache.memory_consumption=128'; \
-	echo 'opcache.interned_strings_buffer=8'; \
-	echo 'opcache.max_accelerated_files=4000'; \
-	echo 'opcache.revalidate_freq=60'; \
-	echo 'opcache.fast_shutdown=1'; \
-	echo 'opcache.enable_cli=1'; \
-	} > /usr/local/etc/php/conf.d/opcache-recommended.ini
+RUN install-php-extensions \
+	bcmath \
+	exif \
+	gd \
+	gmp \
+	mysqli \
+	opcache \
+	pdo_mysql \
+	zip \
+	@composer \
+	&& rm /usr/local/bin/install-php-extensions
 
-#####
-# DOWNLOAD AND INSTALL INVOICE NINJA
-#####
+# Install chromium
+RUN set -eux; \
+	apk add --no-cache \
+	font-isas-misc \
+	supervisor \
+	mysql-client \
+	git \
+	chromium \
+	ttf-freefont \
+	nginx \
+	tzdata
 
-ENV INVOICENINJA_VERSION 4.5.50
+# Copy files
+COPY rootfs /
 
-RUN curl -o ninja.zip -SL https://download.invoiceninja.com/ninja-v${INVOICENINJA_VERSION}.zip \
-	&& unzip -q ninja.zip -d /var/www/ \
-	&& rm ninja.zip \
-	&& mv /var/www/ninja /var/www/app \
-	&& mv /var/www/app/storage /var/www/app/docker-backup-storage \
-	&& mv /var/www/app/public /var/www/app/docker-backup-public \
-	&& mkdir -p /var/www/app/public/logo /var/www/app/storage \
-	&& touch /var/www/app/.env \
-	&& chmod -R 755 /var/www/app/storage \
-	&& chown -R www-data:www-data /var/lib/nginx /var/log/nginx /var/www/app/storage /var/www/app/bootstrap /var/www/app/public/logo /var/www/app/.env /var/www/app/docker-backup-storage /var/www/app/docker-backup-public \
-	&& rm -rf /var/www/app/docs /var/www/app/tests /var/www/ninja
+## Create user
+ARG UID=1000
+ENV INVOICENINJA_USER www-data
 
-######
-# DEFAULT ENV
-######
-ENV LOG errorlog
-ENV SELF_UPDATER_SOURCE ''
-ENV PHANTOMJS_BIN_PATH /usr/local/bin/phantomjs
+RUN addgroup --gid=$UID -S "$INVOICENINJA_USER" \
+	&& adduser --uid=$UID \
+	--disabled-password \
+	--gecos "" \
+	--home "/var/www/app" \
+	--ingroup "$INVOICENINJA_USER" \
+	"$INVOICENINJA_USER"
 
+# Set up app
+ARG INVOICENINJA_VERSION
+ARG BAK_STORAGE_PATH
+ARG BAK_PUBLIC_PATH
+ENV INVOICENINJA_VERSION $INVOICENINJA_VERSION
+ENV BAK_STORAGE_PATH $BAK_STORAGE_PATH
+ENV BAK_PUBLIC_PATH $BAK_PUBLIC_PATH
+COPY --from=build --chown=$INVOICENINJA_USER:$INVOICENINJA_USER /var/www/app /var/www/app
 
-#use to be mounted into nginx for example
-VOLUME /var/www/app/public
-
+USER $UID
 WORKDIR /var/www/app
 
-COPY docker-compose/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-COPY docker-compose/nginx.conf /etc/nginx/nginx.conf
-COPY docker-compose/genssl.sh /genssl.sh
+# Do not remove this ENV
+ENV IS_DOCKER true
+RUN /usr/local/bin/composer install --no-dev --quiet && \
+	mkdir -p /run/nginx /var/www/app/public /var/www/app/public/storage/backups && \
+	chown -R www-data:www-data /var/lib/nginx/tmp /var/lib/nginx /var/www/app/ && \
+	rm -rf /var/www/app/.env && \
+	sed -i -e 's/memory_limit = 128M/memory_limit = 256M/g' /usr/local/etc/php/php.ini
+
+# Override the environment settings from projects .env file
+ENV APP_ENV production
+ENV LOG errorlog
+ENV SNAPPDF_EXECUTABLE_PATH /usr/bin/chromium-browser
+
 EXPOSE 80
 
-COPY docker-compose/cronscript.sh /cronscript.sh
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh /cronscript.sh
-
-ENTRYPOINT ["/entrypoint.sh"]
-
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+ENTRYPOINT ["docker-entrypoint"]
+CMD ["supervisord"]
