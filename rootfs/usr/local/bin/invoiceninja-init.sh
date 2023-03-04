@@ -1,4 +1,4 @@
-!/bin/sh
+#!/bin/sh
 
 # usage: docker_process_init_files [file [file [...]]]
 #    ie: docker_process_init_files /always-initdb.d/*

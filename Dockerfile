@@ -79,8 +79,8 @@ RUN set -eux; \
 COPY rootfs /
 
 ## Create user
-ARG UID=1000
-ENV INVOICENINJA_USER www-data
+ARG UID=1500
+ENV INVOICENINJA_USER invoiceninja
 
 RUN addgroup --gid=$UID -S "$INVOICENINJA_USER" \
 	&& adduser --uid=$UID \
@@ -99,16 +99,19 @@ ENV BAK_STORAGE_PATH $BAK_STORAGE_PATH
 ENV BAK_PUBLIC_PATH $BAK_PUBLIC_PATH
 COPY --from=build --chown=$INVOICENINJA_USER:$INVOICENINJA_USER /var/www/app /var/www/app
 
-USER $UID
+USER invoiceninja
 WORKDIR /var/www/app
 
 # Do not remove this ENV
 ENV IS_DOCKER true
-RUN /usr/local/bin/composer install --no-dev --quiet && \
-	mkdir -p /run/nginx /var/www/app/public /var/www/app/public/storage/backups && \
-	chown -R www-data:www-data /var/lib/nginx/tmp /var/lib/nginx /var/www/app/ && \
-	rm -rf /var/www/app/.env && \
-	sed -i -e 's/memory_limit = 128M/memory_limit = 256M/g' /usr/local/etc/php/php.ini
+RUN /usr/local/bin/composer install --no-dev --quiet
+
+USER root
+
+RUN	mkdir -p /run/nginx /var/www/app/public /var/www/app/public/storage/backups \
+	&& chown -R www-data:www-data /var/lib/nginx/tmp /var/lib/nginx /var/www/app/ \
+	&& rm -rf /var/www/app/.env \
+	&& sed -i -e 's/memory_limit = 128M/memory_limit = 256M/g' /usr/local/etc/php/php.ini
 
 # Override the environment settings from projects .env file
 ENV APP_ENV production
@@ -117,5 +120,5 @@ ENV SNAPPDF_EXECUTABLE_PATH /usr/bin/chromium-browser
 
 EXPOSE 80
 
-ENTRYPOINT ["docker-entrypoint"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint"]
 CMD ["supervisord"]
