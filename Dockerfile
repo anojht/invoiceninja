@@ -10,7 +10,7 @@ ENV PHANTOMJS phantomjs-2.1.1-linux-x86_64
 RUN apk update \
 	&& apk add --no-cache git gmp-dev freetype-dev libjpeg-turbo-dev \
 	libzip-dev unzip nginx nano coreutils chrpath fontconfig libpng-dev \
-	bash php7-zip php7-pdo php7-pdo_mysql supervisor
+	bash supervisor
 
 RUN docker-php-ext-configure gd --with-freetype=/usr/include/ --with-jpeg=/usr/include/ \
 	&& docker-php-ext-configure gmp \
