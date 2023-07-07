@@ -14,15 +14,16 @@ RUN set -eux; apk add curl unzip
 # Extract Invoice Ninja
 RUN mkdir -p /var/www/app \
 	&& tar --strip-components=1 -xf /tmp/ninja.tar.gz -C /var/www/app/ \
-	&& mkdir -p /var/www/app/public/logo /var/www/app/storage \
-	&& mv /var/www/app/.env.example /var/www/app/.env \
-	&& rm -rf /var/www/app/docs /var/www/app/tests
+	&& mkdir -p /var/www/app/public/logo /var/www/app/storage
 
 # Download and extract the latest react application
 RUN curl -LGO $(curl https://api.github.com/repos/invoiceninja/ui/releases/latest | grep "browser_download_url" | awk '{ print $2 }' | sed 's/,$//' | sed 's/"//g');
 RUN cp invoiceninja-react.zip /tmp/invoiceninja-react.zip
 RUN unzip /tmp/invoiceninja-react.zip
 RUN cp -r dist/react/* /var/www/app/public/react/
+RUN mkdir -p /var/www/app/public/tinymce_6.4.2/tinymce/js/
+RUN cp -r dist/tinymce_6.4.2/* /var/www/app/public/tinymce_6.4.2/
+
 # Download and extract the latest react application
 #
 WORKDIR /var/www/app/
@@ -51,18 +52,6 @@ RUN mv /usr/local/etc/php/php.ini-production /usr/local/etc/php/php.ini
 # https://hub.docker.com/r/mlocati/php-extension-installer/tags
 COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
 
-RUN install-php-extensions \
-	bcmath \
-	exif \
-	gd \
-	gmp \
-	mysqli \
-	opcache \
-	pdo_mysql \
-	zip \
-	@composer \
-	&& rm /usr/local/bin/install-php-extensions
-
 # Install chromium
 RUN set -eux; \
 	apk add --no-cache \
@@ -74,6 +63,18 @@ RUN set -eux; \
 	ttf-freefont \
 	nginx \
 	tzdata
+
+RUN install-php-extensions \
+	bcmath \
+	exif \
+	gd \
+	gmp \
+	mysqli \
+	opcache \
+	pdo_mysql \
+	zip \
+	@composer \
+	&& rm /usr/local/bin/install-php-extensions
 
 # Copy files
 COPY rootfs /
@@ -104,7 +105,7 @@ WORKDIR /var/www/app
 
 # Do not remove this ENV
 ENV IS_DOCKER true
-RUN /usr/local/bin/composer install --no-dev --quiet
+RUN /usr/local/bin/composer install --no-dev --no-scripts --no-interaction --no-autoloader
 
 USER root
 
