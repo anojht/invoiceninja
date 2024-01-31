@@ -32,7 +32,7 @@ RUN cp -r dist/tinymce_6.4.2/* /var/www/app/public/tinymce_6.4.2/
 WORKDIR /var/www/app/
 
 # Prepare php image
-FROM php:${PHP_VERSION}-fpm-alpine as prodbuild
+FROM php:${PHP_VERSION}-fpm-alpine as phpbuild
 
 LABEL maintainer="Anojh Thayaparan <athayapa@sfu.ca>"
 
@@ -102,9 +102,9 @@ ENV IS_DOCKER true
 RUN /usr/local/bin/composer install --no-dev --no-scripts --no-interaction
 RUN /usr/local/bin/composer dump-autoload --optimize --no-dev --classmap-authoritative --no-scripts --no-interaction
 
-FROM --platform=$BUILDPLATFORM nodebuild AS build1
+FROM --platform=$BUILDPLATFORM nodebuild AS dependencybuild
 
-COPY --from=prodbuild /var/www/app/vendor /var/www/app/vendor
+COPY --from=phpbuild /var/www/app/vendor /var/www/app/vendor
 
 # Install node packages
 ARG BAK_STORAGE_PATH
@@ -115,9 +115,9 @@ RUN --mount=target=/var/www/app/node_modules,type=cache \
 	&& mv /var/www/app/storage $BAK_STORAGE_PATH \
 	&& mv /var/www/app/public $BAK_PUBLIC_PATH
 
-FROM prodbuild as build2
+FROM phpbuild as prodbuild
 
-COPY --from=build1 --chown=$INVOICENINJA_USER:$INVOICENINJA_USER /var/www/app /var/www/app
+COPY --from=dependencybuild --chown=$INVOICENINJA_USER:$INVOICENINJA_USER /var/www/app /var/www/app
 
 USER root
 
