@@ -7,29 +7,20 @@ FROM --platform=$BUILDPLATFORM node:lts-alpine as nodebuild
 
 # Download Invoice Ninja
 ARG INVOICENINJA_VERSION
-ADD https://github.com/invoiceninja/invoiceninja/tarball/v$INVOICENINJA_VERSION /tmp/ninja.tar.gz
+ADD https://github.com/invoiceninja/invoiceninja/releases/download/v$INVOICENINJA_VERSION/react-invoiceninja.tar /tmp/ninja.tar
 
 RUN set -eux; apk add curl unzip
 
 # Extract Invoice Ninja
 RUN mkdir -p /var/www/app \
-	&& tar --strip-components=1 -xf /tmp/ninja.tar.gz -C /var/www/app/ \
+	&& tar -xvf /tmp/ninja.tar -C /var/www/app/ \
 	&& mkdir -p /var/www/app/public/logo /var/www/app/storage
 
-# Download and extract the latest react application
-RUN curl -LGO $(curl https://api.github.com/repos/invoiceninja/ui/releases/latest | grep "browser_download_url" | awk '{ print $2 }' | sed 's/,$//' | sed 's/"//g');
-RUN cp invoiceninja-react.zip /tmp/invoiceninja-react.zip
-RUN unzip /tmp/invoiceninja-react.zip
-RUN mkdir /var/www/app/public/react/v$INVOICENINJA_VERSION/
-RUN cp -r dist/react/* /var/www/app/public/react/v$INVOICENINJA_VERSION/
-RUN cp -r dist/react/* /var/www/app/public/react/
+WORKDIR /var/www/app
 
-RUN mkdir -p /var/www/app/public/tinymce_6.4.2/tinymce/js/
-RUN cp -r dist/tinymce_6.4.2/* /var/www/app/public/tinymce_6.4.2/
+RUN echo ls -l
 
-# Download and extract the latest react application
-#
-WORKDIR /var/www/app/
+RUN cp /var/www/app/ui/dist/index.html /var/www/app/resources/views/react/index.blade.php
 
 # Prepare php image
 FROM php:${PHP_VERSION}-fpm-alpine as phpbuild
@@ -52,7 +43,6 @@ RUN set -eux; \
 	font-isas-misc \
 	supervisor \
 	mysql-client \
-	git \
 	chromium \
 	ttf-freefont \
 	nginx \
@@ -94,25 +84,23 @@ ENV BAK_STORAGE_PATH $BAK_STORAGE_PATH
 ENV BAK_PUBLIC_PATH $BAK_PUBLIC_PATH
 COPY --from=nodebuild --chown=$INVOICENINJA_USER:$INVOICENINJA_USER /var/www/app /var/www/app
 
+RUN rm -rf /var/www/app/ui
+
 USER invoiceninja
 WORKDIR /var/www/app
 
 # Do not remove this ENV
 ENV IS_DOCKER true
-RUN /usr/local/bin/composer install --no-dev --no-scripts --no-interaction
-RUN /usr/local/bin/composer dump-autoload --optimize --no-dev --classmap-authoritative --no-scripts --no-interaction
-
 FROM --platform=$BUILDPLATFORM nodebuild AS dependencybuild
 
+WORKDIR /var/www/app
 COPY --from=phpbuild /var/www/app/vendor /var/www/app/vendor
 
 # Install node packages
 ARG BAK_STORAGE_PATH
 ARG BAK_PUBLIC_PATH
-RUN --mount=target=/var/www/app/node_modules,type=cache \
-	npm install \
-	&& npm run production \
-	&& mv /var/www/app/storage $BAK_STORAGE_PATH \
+
+RUN mv /var/www/app/storage $BAK_STORAGE_PATH \
 	&& mv /var/www/app/public $BAK_PUBLIC_PATH
 
 FROM phpbuild as prodbuild
