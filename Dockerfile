@@ -7,9 +7,16 @@ FROM --platform=$BUILDPLATFORM node:lts-alpine as nodebuild
 
 # Download Invoice Ninja
 ARG INVOICENINJA_VERSION
-ADD https://github.com/invoiceninja/invoiceninja/releases/download/v$INVOICENINJA_VERSION/react-invoiceninja.tar /tmp/ninja.tar
+ARG REPOSITORY=invoiceninja/invoiceninja
 
-RUN set -eux; apk add curl unzip
+ARG FILENAME=invoiceninja.tar
+
+RUN set -eux; apk add curl unzip grep
+
+# Fetch the latest release information
+RUN DOWNLOAD_URL=$(curl -s "https://api.github.com/repos/invoiceninja/invoiceninja/releases/latest" | grep -o '"browser_download_url": "[^"]*invoiceninja.tar"' | cut -d '"' -f 4) && \
+	curl -LJO "$DOWNLOAD_URL" && \
+	mv invoiceninja.tar /tmp/ninja.tar
 
 # Extract Invoice Ninja
 RUN mkdir -p /var/www/app \
@@ -17,10 +24,6 @@ RUN mkdir -p /var/www/app \
 	&& mkdir -p /var/www/app/public/logo /var/www/app/storage
 
 WORKDIR /var/www/app
-
-RUN echo ls -l
-
-RUN cp /var/www/app/ui/dist/index.html /var/www/app/resources/views/react/index.blade.php
 
 # Prepare php image
 FROM php:${PHP_VERSION}-fpm-alpine as phpbuild
@@ -45,8 +48,8 @@ RUN set -eux; \
 	mysql-client \
 	chromium \
 	ttf-freefont \
-	nginx \
-	tzdata
+	ttf-dejavu \
+	nginx
 
 RUN install-php-extensions \
 	bcmath \
