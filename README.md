@@ -37,7 +37,7 @@ docker run -d
   -e MAIL_FROM_NAME='Sales Department'
   -e MAIL_PASSWORD='SUPERSECRETEMAILPASSWORD'
   -e SSL_HOSTNAME='localhost'
-  -p '80:8000'
+  -p '8000:80'
   -p '443:443'
   anojht/invoiceninja
 ```
