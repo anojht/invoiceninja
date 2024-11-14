@@ -3,7 +3,7 @@ ARG BAK_STORAGE_PATH=/var/www/app/docker-backup-storage/
 ARG BAK_PUBLIC_PATH=/var/www/app/docker-backup-public/
 
 # Get Invoice Ninja and install nodejs packages
-FROM --platform=$BUILDPLATFORM node:lts-alpine as nodebuild
+FROM --platform=$BUILDPLATFORM node:lts-alpine AS nodebuild
 
 # Download Invoice Ninja
 ARG INVOICENINJA_VERSION
@@ -26,7 +26,7 @@ RUN mkdir -p /var/www/app \
 WORKDIR /var/www/app
 
 # Prepare php image
-FROM php:${PHP_VERSION}-fpm-alpine as phpbuild
+FROM php:${PHP_VERSION}-fpm-alpine AS phpbuild
 
 LABEL maintainer="Anojh Thayaparan <athayapa@sfu.ca>"
 
@@ -107,7 +107,7 @@ ARG BAK_PUBLIC_PATH
 RUN mv /var/www/app/storage $BAK_STORAGE_PATH \
 	&& mv /var/www/app/public $BAK_PUBLIC_PATH
 
-FROM phpbuild as prodbuild
+FROM phpbuild AS prodbuild
 
 COPY --from=dependencybuild --chown=$INVOICENINJA_USER:$INVOICENINJA_USER /var/www/app /var/www/app
 
