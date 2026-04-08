@@ -1,4 +1,4 @@
-ARG PHP_VERSION=8.2
+ARG PHP_VERSION=8.4
 ARG BAK_STORAGE_PATH=/var/www/app/docker-backup-storage/
 ARG BAK_PUBLIC_PATH=/var/www/app/docker-backup-public/
 
@@ -9,19 +9,25 @@ FROM --platform=$BUILDPLATFORM node:lts-alpine AS nodebuild
 ARG INVOICENINJA_VERSION
 ARG REPOSITORY=invoiceninja/invoiceninja
 
-ARG FILENAME=invoiceninja.tar
+RUN set -eux; apk add curl
 
-RUN set -eux; apk add curl unzip grep
-
-# Fetch the latest release information
-RUN DOWNLOAD_URL=$(curl -s "https://api.github.com/repos/invoiceninja/invoiceninja/releases/latest" | grep -o '"browser_download_url": "[^"]*invoiceninja.tar"' | cut -d '"' -f 4) && \
-	curl -LJO "$DOWNLOAD_URL" && \
-	mv invoiceninja.tar /tmp/ninja.tar
+# If INVOICENINJA_VERSION is set, pin the download to that tag; otherwise fall
+# back to the stable "releases/latest/download" URL that upstream uses.
+RUN set -eux; \
+	if [ -n "${INVOICENINJA_VERSION:-}" ]; then \
+		URL="https://github.com/${REPOSITORY}/releases/download/v${INVOICENINJA_VERSION}/invoiceninja.tar.gz"; \
+	else \
+		URL="https://github.com/${REPOSITORY}/releases/latest/download/invoiceninja.tar.gz"; \
+	fi; \
+	echo "Downloading $URL"; \
+	curl -fL -o /tmp/ninja.tar.gz "$URL"
 
 # Extract Invoice Ninja
 RUN mkdir -p /var/www/app \
-	&& tar -xvf /tmp/ninja.tar -C /var/www/app/ \
-	&& mkdir -p /var/www/app/public/logo /var/www/app/storage
+	&& tar -xzf /tmp/ninja.tar.gz -C /var/www/app/ \
+	&& mkdir -p /var/www/app/public/logo /var/www/app/storage \
+	# Serve the React SPA entrypoint as the default index
+	&& ln -sf /var/www/app/resources/views/react/index.blade.php /var/www/app/public/index.html
 
 WORKDIR /var/www/app
 
@@ -40,15 +46,20 @@ RUN mv /usr/local/etc/php/php.ini-production /usr/local/etc/php/php.ini
 # https://hub.docker.com/r/mlocati/php-extension-installer/tags
 COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
 
-# Install chromium
+# Install system deps: supervisor, nginx, mysql client, chromium for snappdf,
+# and unicode/CJK fonts so generated PDFs render non-latin glyphs and emoji.
 RUN set -eux; \
 	apk add --no-cache \
 	font-isas-misc \
 	supervisor \
 	mysql-client \
+	fcgi \
 	chromium \
 	ttf-freefont \
 	ttf-dejavu \
+	font-noto \
+	font-noto-cjk \
+	font-noto-emoji \
 	nginx
 
 RUN install-php-extensions \
@@ -61,6 +72,9 @@ RUN install-php-extensions \
 	pdo_mysql \
 	zip \
 	intl \
+	mbstring \
+	pcntl \
+	soap \
 	@composer \
 	&& rm /usr/local/bin/install-php-extensions
 
@@ -121,9 +135,15 @@ RUN	mkdir -p /run/nginx /var/www/app/public /var/www/app/public/storage/backups 
 # Override the environment settings from projects .env file
 ENV APP_ENV production
 ENV LOG errorlog
+# Upstream renamed this variable; keep both set for compatibility with older
+# and newer snappdf releases.
+ENV SNAPPDF_CHROMIUM_PATH /usr/bin/chromium-browser
 ENV SNAPPDF_EXECUTABLE_PATH /usr/bin/chromium-browser
 
 EXPOSE 80
+
+HEALTHCHECK --start-period=100s \
+	CMD REMOTE_ADDR=127.0.0.1 REQUEST_URI=/health REQUEST_METHOD=GET SCRIPT_FILENAME=/var/www/app/public/index.php cgi-fcgi -bind -connect 127.0.0.1:9000 | grep '{"status":"ok","message":"API is healthy"}'
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint"]
 CMD ["supervisord"]

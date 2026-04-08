@@ -15,6 +15,7 @@
   <Config Name="APP_ENV" Target="APP_ENV" Default="production" Description="Container Variable: APP_ENV" Type="Variable" Display="advanced" Required="false" Mask="false"/>
   <Config Name="Debug Mode" Target="APP_DEBUG" Default="false" Description="Container Variable: APP_DEBUG" Type="Variable" Display="advanced" Required="false" Mask="false"/>
   <Config Name="Require HTTPS" Target="REQUIRE_HTTPS" Default="false" Description="Container Variable: REQUIRE_HTTPS" Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Trusted Proxies" Target="TRUSTED_PROXIES" Default="*" Description="Container Variable: TRUSTED_PROXIES - Set to * when running behind a reverse proxy (e.g. SWAG, Nginx Proxy Manager) so Invoice Ninja honors X-Forwarded-* headers. Leave blank if not behind a proxy." Type="Variable" Display="advanced" Required="false" Mask="false"/>
   <Config Name="Database Host" Target="DB_HOST" Default="unraidIP" Description="Container Variable: DB_HOST" Type="Variable" Display="always" Required="false" Mask="false"/>
   <Config Name="Database Port" Target="DB_PORT" Default="3306" Description="Container Variable: DB_PORT" Type="Variable" Display="always" Required="false" Mask="false"/>
   <Config Name="Database Name" Target="DB_DATABASE" Default="ninja" Description="Container Variable: DB_DATABASE" Type="Variable" Display="always" Required="false" Mask="false"/>

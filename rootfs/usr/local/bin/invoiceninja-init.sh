@@ -25,10 +25,6 @@ docker_process_init_files() {
     done
 }
 
-php artisan config:cache
-php artisan optimize
-php artisan package:discover
-
 # Check if DB works, if not crash the app.
 DB_READY=$(php artisan tinker --execute='echo app()->call("App\Utils\SystemHealth@dbCheck")["success"];')
 if [ "$DB_READY" != "1" ]; then
@@ -37,6 +33,9 @@ if [ "$DB_READY" != "1" ]; then
 fi
 
 php artisan migrate --force
+php artisan cache:clear # Clear after the migration
+php artisan ninja:design-update
+php artisan optimize
 
 # If first IN run, it needs to be initialized
 IN_INIT=$(php artisan tinker --execute='echo Schema::hasTable("accounts") && !App\Models\Account::all()->first();')
