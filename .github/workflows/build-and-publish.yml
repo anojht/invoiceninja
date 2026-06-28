@@ -1,0 +1,179 @@
+name: Build & Publish Image
+
+# Builds the multi-arch (amd64 + arm64) image and pushes it to Docker Hub.
+#
+# Triggers:
+#   - workflow_dispatch : build on demand. Optionally pin a version, otherwise
+#                         the latest Invoice Ninja release is used.
+#   - schedule          : daily check for a new Invoice Ninja release. Builds
+#                         only when that version has not been published yet.
+#   - push (master)     : rebuild when the Dockerfile / rootfs / this workflow
+#                         change, against the current latest release.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Invoice Ninja version, e.g. 5.13.26 (blank = latest release)"
+        required: false
+        type: string
+  schedule:
+    - cron: "0 6 * * *"
+  push:
+    branches: [master]
+    paths:
+      - "Dockerfile"
+      - "rootfs/**"
+      - ".github/workflows/build-and-publish.yml"
+
+env:
+  REGISTRY_IMAGE: anojht/invoiceninja
+
+jobs:
+  # ------------------------------------------------------------------
+  # Resolve which Invoice Ninja version to build and whether to build.
+  # ------------------------------------------------------------------
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      major: ${{ steps.resolve.outputs.major }}
+      minor: ${{ steps.resolve.outputs.minor }}
+      should_build: ${{ steps.resolve.outputs.should_build }}
+    steps:
+      - name: Resolve target version
+        id: resolve
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "${INPUT_VERSION:-}" ]; then
+            VERSION="${INPUT_VERSION#v}"
+          else
+            VERSION="$(curl -fsSL https://api.github.com/repos/invoiceninja/invoiceninja/releases/latest | jq -r '.tag_name')"
+            VERSION="${VERSION#v}"
+          fi
+
+          MAJOR="$(echo "$VERSION" | cut -d. -f1)"
+          MINOR="$(echo "$VERSION" | cut -d. -f2)"
+          echo "Resolved Invoice Ninja version: $VERSION"
+
+          # On the scheduled run, skip if this version is already on Docker Hub.
+          SHOULD_BUILD=true
+          if [ "$EVENT_NAME" = "schedule" ]; then
+            if curl -fsSL "https://hub.docker.com/v2/repositories/${REGISTRY_IMAGE}/tags/${VERSION}/" >/dev/null 2>&1; then
+              echo "Tag ${VERSION} already published — nothing to do."
+              SHOULD_BUILD=false
+            fi
+          fi
+
+          {
+            echo "version=$VERSION"
+            echo "major=$MAJOR"
+            echo "minor=$MINOR"
+            echo "should_build=$SHOULD_BUILD"
+          } >> "$GITHUB_OUTPUT"
+
+  # ------------------------------------------------------------------
+  # Build each architecture on its own native runner and push by digest.
+  # ------------------------------------------------------------------
+  build:
+    needs: version
+    if: needs.version.outputs.should_build == 'true'
+    runs-on: ${{ startsWith(matrix.platform, 'linux/arm') && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    environment: Docker Prod
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - linux/amd64
+          - linux/arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare platform pair
+        run: echo "PLATFORM_PAIR=${PLATFORM//\//-}" >> "$GITHUB_ENV"
+        env:
+          PLATFORM: ${{ matrix.platform }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          build-args: |
+            INVOICENINJA_VERSION=${{ needs.version.outputs.version }}
+          outputs: type=image,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ env.PLATFORM_PAIR }}
+          cache-to: type=gha,mode=max,scope=${{ env.PLATFORM_PAIR }}
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # ------------------------------------------------------------------
+  # Merge the per-arch digests into one multi-arch tag set and push.
+  # ------------------------------------------------------------------
+  merge:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    environment: Docker Prod
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY_IMAGE }}
+          tags: |
+            type=raw,value=latest
+            type=raw,value=${{ needs.version.outputs.version }}
+            type=raw,value=${{ needs.version.outputs.major }}
+            type=raw,value=${{ needs.version.outputs.major }}.${{ needs.version.outputs.minor }}
+
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
+
+      - name: Inspect image
+        run: docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${{ needs.version.outputs.version }}
