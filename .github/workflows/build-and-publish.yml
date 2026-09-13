@@ -68,6 +68,18 @@ jobs:
             fi
           fi
 
+          # Upstream can publish a release without its tarball; don't build a 404.
+          TARBALL_URL="https://github.com/invoiceninja/invoiceninja/releases/download/v${VERSION}/invoiceninja.tar.gz"
+          if [ "$SHOULD_BUILD" = true ] && ! curl -fsIL "$TARBALL_URL" >/dev/null 2>&1; then
+            if [ "$EVENT_NAME" = "schedule" ]; then
+              echo "::warning::v${VERSION} has no invoiceninja.tar.gz yet; the next scheduled run will retry."
+              SHOULD_BUILD=false
+            else
+              echo "::error::v${VERSION} has no invoiceninja.tar.gz at ${TARBALL_URL}"
+              exit 1
+            fi
+          fi
+
           {
             echo "version=$VERSION"
             echo "major=$MAJOR"
