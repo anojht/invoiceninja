@@ -6,7 +6,9 @@ name: Build & Publish Image
 #   - workflow_dispatch : build on demand. Optionally pin a version, otherwise
 #                         the latest Invoice Ninja release is used.
 #   - schedule          : daily check for a new Invoice Ninja release. Builds
-#                         only when that version has not been published yet.
+#                         only when that version has not been published yet,
+#                         or when the PHP base image has a newer patch release
+#                         (e.g. 8.4.27 -> 8.4.28) than the published image.
 #   - push (master)     : rebuild when the Dockerfile / rootfs / this workflow
 #                         change, against the current latest release.
 on:
@@ -59,12 +61,30 @@ jobs:
           MINOR="$(echo "$VERSION" | cut -d. -f2)"
           echo "Resolved Invoice Ninja version: $VERSION"
 
-          # On the scheduled run, skip if this version is already on Docker Hub.
+          php_version() {
+            docker buildx imagetools inspect "$1" --format '{{json (index .Image "linux/amd64").Config.Env}}' \
+              | jq -r '.[] | select(startswith("PHP_VERSION=")) | sub("PHP_VERSION="; "")'
+          }
+
+          # On the scheduled run, skip a version already on Docker Hub unless
+          # the PHP base image has a newer patch release on the same minor line.
           SHOULD_BUILD=true
           if [ "$EVENT_NAME" = "schedule" ]; then
             if curl -fsSL "https://hub.docker.com/v2/repositories/${REGISTRY_IMAGE}/tags/${VERSION}/" >/dev/null 2>&1; then
-              echo "Tag ${VERSION} already published — nothing to do."
               SHOULD_BUILD=false
+              PUBLISHED_PHP="$(php_version "${REGISTRY_IMAGE}:${VERSION}" || true)"
+              PHP_LINE="$(echo "$PUBLISHED_PHP" | cut -d. -f1-2)"
+              BASE_PHP="$(php_version "php:${PHP_LINE}-fpm-alpine" || true)"
+              if [ -z "$PUBLISHED_PHP" ] || [ -z "$BASE_PHP" ]; then
+                echo "::warning::Could not read PHP versions (published='${PUBLISHED_PHP}', base='${BASE_PHP}'); skipping."
+              elif [ "$(echo "$BASE_PHP" | cut -d. -f1-2)" = "$PHP_LINE" ] \
+                && [ "$BASE_PHP" != "$PUBLISHED_PHP" ] \
+                && [ "$(printf '%s\n' "$PUBLISHED_PHP" "$BASE_PHP" | sort -V | tail -1)" = "$BASE_PHP" ]; then
+                echo "Tag ${VERSION} has PHP ${PUBLISHED_PHP}; base image has patch release ${BASE_PHP}. Rebuilding."
+                SHOULD_BUILD=true
+              else
+                echo "Tag ${VERSION} already published with PHP ${PUBLISHED_PHP} (base: ${BASE_PHP}) — nothing to do."
+              fi
             fi
           fi
 
